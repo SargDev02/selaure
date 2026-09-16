@@ -3,62 +3,280 @@ import "server-only";
 import { sheets } from "@/lib/google-sheets";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-function toInteger(value: unknown): number {
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+function normalizeHeader(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function toInteger(value: unknown): number | null {
   if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+
     return Math.trunc(value);
   }
 
-  const cleaned = String(value ?? "").replace(/[^\d-]/g, "");
-  return cleaned ? Number(cleaned) : 0;
+  const cleaned = String(value ?? "")
+    .trim()
+    .replace(/[^\d-]/g, "");
+
+  if (!cleaned) return null;
+
+  const number = Number(cleaned);
+
+  if (!Number.isFinite(number)) return null;
+
+  return Math.trunc(number);
+}
+
+function isValidPositiveInteger(value: number | null) {
+  return (
+    value !== null &&
+    value >= 0 &&
+    value <= POSTGRES_INTEGER_MAX
+  );
 }
 
 export async function syncProducts() {
+  /*
+   * Leemos encabezados + productos.
+   * UNFORMATTED_VALUE hace que precios y cantidades
+   * lleguen como números reales desde Google Sheets.
+   */
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-    range: "Inventario!A2:L",
+    range: "Inventario!A1:Z",
+    valueRenderOption: "UNFORMATTED_VALUE",
   });
 
-  const rows = response.data.values ?? [];
+  const values = response.data.values ?? [];
+
+  if (values.length < 2) {
+    throw new Error(
+      "No se encontraron productos en la hoja Inventario."
+    );
+  }
+
+  const headers = values[0].map(normalizeHeader);
+  const rows = values.slice(1);
+
+  /*
+   * Buscar columnas por encabezado.
+   */
+  function getColumnIndex(name: string) {
+    const index = headers.indexOf(
+      normalizeHeader(name)
+    );
+
+    if (index === -1) {
+      throw new Error(
+        `No se encontró la columna "${name}" en Inventario.`
+      );
+    }
+
+    return index;
+  }
+
+  const columns = {
+    codigo: getColumnIndex("CÓDIGO"),
+    descripcion: getColumnIndex("DESCRIPCIÓN"),
+    marca: getColumnIndex("MARCA"),
+    categoria: getColumnIndex("Categoria"),
+    stock: getColumnIndex("STOCK ACTUAL"),
+    precio: getColumnIndex("PRECIO VENTA"),
+    urlProveedor: getColumnIndex("URL_PROVEEDOR"),
+  };
+
+  /*
+   * Productos que ya existen en Supabase.
+   * Esto permite conservar los datos obtenidos
+   * del proveedor.
+   */
+  const {
+    data: existingProducts,
+    error: existingError,
+  } = await supabaseAdmin
+    .from("productos")
+    .select(`
+      codigo,
+      url_proveedor,
+      vinculacion_estado,
+      nombre,
+      descripcion,
+      imagen_url
+    `);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existingByCode = new Map(
+    (existingProducts ?? []).map((product) => [
+      product.codigo,
+      product,
+    ])
+  );
+
   const now = new Date().toISOString();
 
-  const productos = rows
-    .filter((row) => row[0])
-    .map((row) => ({
-      codigo: String(row[0]).trim(),
-      nombre_original_excel: String(row[1] ?? "").trim(),
-      marca: String(row[2] ?? "").trim(),
-      categoria: String(row[3] ?? "").trim() || null,
+  const productos = [];
+  const filasInvalidas: {
+    fila: number;
+    codigo: string;
+    motivo: string;
+  }[] = [];
 
-      // Columna G
-      stock_actual: toInteger(row[6]),
+  /*
+   * Guardamos TODOS los códigos encontrados en Sheets,
+   * incluso si una fila tiene un error.
+   *
+   * Así una fila temporalmente incorrecta no provoca que
+   * el producto sea desactivado en Supabase.
+   */
+  const codigosSheets = new Set<string>();
 
-      // Columna J = PRECIO VENTA
-      precio: toInteger(row[9]),
+  for (const [index, row] of rows.entries()) {
+    const codigo = String(
+      row[columns.codigo] ?? ""
+    ).trim();
 
-      // Columna L
-      url_proveedor: String(row[11] ?? "").trim() || null,
+    if (!codigo) {
+      continue;
+    }
+
+    codigosSheets.add(codigo);
+
+    const precio = toInteger(
+      row[columns.precio]
+    );
+
+    const stock = toInteger(
+      row[columns.stock]
+    );
+
+    /*
+     * Validación de precio.
+     */
+    if (!isValidPositiveInteger(precio)) {
+      filasInvalidas.push({
+        fila: index + 2,
+        codigo,
+        motivo: `PRECIO VENTA inválido: ${
+          row[columns.precio] ?? "vacío"
+        }`,
+      });
+
+      continue;
+    }
+
+    /*
+     * Validación de stock.
+     */
+    if (!isValidPositiveInteger(stock)) {
+      filasInvalidas.push({
+        fila: index + 2,
+        codigo,
+        motivo: `STOCK ACTUAL inválido: ${
+          row[columns.stock] ?? "vacío"
+        }`,
+      });
+
+      continue;
+    }
+
+    const urlProveedor =
+      String(
+        row[columns.urlProveedor] ?? ""
+      ).trim() || null;
+
+    const previous =
+      existingByCode.get(codigo);
+
+    /*
+     * Si cambia la URL del proveedor,
+     * obligamos a volver a obtener:
+     *
+     * - nombre comercial
+     * - descripción
+     * - imagen
+     */
+    const proveedorCambio =
+      Boolean(previous) &&
+      previous?.url_proveedor !== urlProveedor;
+
+    productos.push({
+      codigo,
+
+      nombre_original_excel: String(
+        row[columns.descripcion] ?? ""
+      ).trim(),
+
+      marca: String(
+        row[columns.marca] ?? ""
+      ).trim(),
+
+      categoria:
+        String(
+          row[columns.categoria] ?? ""
+        ).trim() || null,
+
+      stock_actual: stock,
+
+      precio,
+
+      url_proveedor: urlProveedor,
 
       activo: true,
+
       ultima_sync_sheets: now,
-    }));
 
-  if (productos.length === 0) {
-    throw new Error("No se encontraron productos en Inventario.");
-  }
+      nombre: proveedorCambio
+        ? null
+        : previous?.nombre ?? null,
 
-  // Crear productos nuevos o actualizar existentes por código.
-  const { error: upsertError } = await supabaseAdmin
-    .from("productos")
-    .upsert(productos, {
-      onConflict: "codigo",
+      descripcion: proveedorCambio
+        ? null
+        : previous?.descripcion ?? null,
+
+      imagen_url: proveedorCambio
+        ? null
+        : previous?.imagen_url ?? null,
+
+      vinculacion_estado: proveedorCambio
+        ? "pendiente"
+        : previous?.vinculacion_estado ??
+          "pendiente",
     });
-
-  if (upsertError) {
-    throw upsertError;
   }
 
-  // Buscar productos que ya no estén en Google Sheets.
-  const { data: productosBD, error: selectError } = await supabaseAdmin
+  /*
+   * Sincronizar únicamente filas válidas.
+   */
+  if (productos.length > 0) {
+    const { error: upsertError } =
+      await supabaseAdmin
+        .from("productos")
+        .upsert(productos, {
+          onConflict: "codigo",
+        });
+
+    if (upsertError) {
+      throw upsertError;
+    }
+  }
+
+  /*
+   * Desactivar productos que realmente
+   * desaparecieron de Google Sheets.
+   */
+  const {
+    data: productosBD,
+    error: selectError,
+  } = await supabaseAdmin
     .from("productos")
     .select("codigo")
     .eq("activo", true);
@@ -67,21 +285,27 @@ export async function syncProducts() {
     throw selectError;
   }
 
-  const codigosSheets = new Set(productos.map((producto) => producto.codigo));
-
   const codigosDesactivados =
     productosBD
-      ?.filter((producto) => !codigosSheets.has(producto.codigo))
-      .map((producto) => producto.codigo) ?? [];
+      ?.filter(
+        (product) =>
+          !codigosSheets.has(product.codigo)
+      )
+      .map((product) => product.codigo) ??
+    [];
 
   if (codigosDesactivados.length > 0) {
-    const { error: deactivateError } = await supabaseAdmin
-      .from("productos")
-      .update({
-        activo: false,
-        ultima_sync_sheets: now,
-      })
-      .in("codigo", codigosDesactivados);
+    const { error: deactivateError } =
+      await supabaseAdmin
+        .from("productos")
+        .update({
+          activo: false,
+          ultima_sync_sheets: now,
+        })
+        .in(
+          "codigo",
+          codigosDesactivados
+        );
 
     if (deactivateError) {
       throw deactivateError;
@@ -89,9 +313,12 @@ export async function syncProducts() {
   }
 
   return {
-    productosLeidos: productos.length,
-    productosSincronizados: productos.length,
-    productosDesactivados: codigosDesactivados.length,
+    productosLeidos: codigosSheets.size,
+    productosSincronizados:
+      productos.length,
+    productosDesactivados:
+      codigosDesactivados.length,
+    filasInvalidas,
     fecha: now,
   };
 }
