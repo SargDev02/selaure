@@ -2,7 +2,10 @@ import { Hero } from "@/components/Hero";
 import { ProductCatalog } from "@/components/ProductCatalog";
 import { FloatingWhatsAppButton } from "@/components/FloatingWhatsAppButton";
 import { Footer } from "@/components/Footer";
+
 import { getProducts } from "@/lib/products";
+
+export const revalidate = 3600;
 
 export default async function Home() {
   const products = await getProducts();
@@ -14,8 +17,8 @@ export default async function Home() {
     <>
       <Hero />
 
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:py-14">
-        <div className="mb-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:py-14">
+        <div className="mb-6 sm:mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold-primary">
             Nuestro catálogo
           </p>
@@ -35,11 +38,8 @@ export default async function Home() {
           whatsappNumber={whatsappNumber}
         />
       </main>
-      <Footer />
 
-      <FloatingWhatsAppButton
-        whatsappNumber={whatsappNumber}
-      />
+      <Footer />
 
       <FloatingWhatsAppButton
         whatsappNumber={whatsappNumber}

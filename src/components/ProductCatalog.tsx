@@ -22,30 +22,17 @@ export function ProductCatalog({
   products,
   whatsappNumber,
 }: ProductCatalogProps) {
-  // Buscador
   const [search, setSearch] = useState("");
-
-  // Categoría
   const [category, setCategory] = useState("Todos");
-
-  // Marca
   const [brand, setBrand] = useState("Todas");
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortOption>("az");
 
-  // Precio máximo
-  const [maxPrice, setMaxPrice] =
-    useState<number | null>(null);
-
-  // Orden
-  const [sort, setSort] =
-    useState<SortOption>("az");
-
-  // Producto seleccionado para el modal
   const [selectedProduct, setSelectedProduct] =
     useState<Product | null>(null);
 
-  /*
-   * Categorías dinámicas
-   */
+  const [showFilters, setShowFilters] = useState(false);
+
   const categories = useMemo(() => {
     const values = products
       .map((product) => product.categoria)
@@ -54,35 +41,27 @@ export function ProductCatalog({
           Boolean(value)
       );
 
-    const uniqueCategories = Array.from(
-      new Set(values)
-    ).sort((a, b) =>
-      a.localeCompare(b, "es")
-    );
-
-    return ["Todos", ...uniqueCategories];
+    return [
+      "Todos",
+      ...Array.from(new Set(values)).sort((a, b) =>
+        a.localeCompare(b, "es")
+      ),
+    ];
   }, [products]);
 
-  /*
-   * Marcas dinámicas
-   */
   const brands = useMemo(() => {
     const values = products
       .map((product) => product.marca)
       .filter(Boolean);
 
-    const uniqueBrands = Array.from(
-      new Set(values)
-    ).sort((a, b) =>
-      a.localeCompare(b, "es")
-    );
-
-    return ["Todas", ...uniqueBrands];
+    return [
+      "Todas",
+      ...Array.from(new Set(values)).sort((a, b) =>
+        a.localeCompare(b, "es")
+      ),
+    ];
   }, [products]);
 
-  /*
-   * Productos filtrados y ordenados
-   */
   const filteredProducts = useMemo(() => {
     const searchValue =
       search.toLowerCase().trim();
@@ -148,7 +127,6 @@ export function ProductCatalog({
         case "price-desc":
           return b.precio - a.precio;
 
-        case "az":
         default:
           return nameA.localeCompare(
             nameB,
@@ -165,9 +143,6 @@ export function ProductCatalog({
     sort,
   ]);
 
-  /*
-   * Limpiar todos los filtros
-   */
   function clearFilters() {
     setSearch("");
     setCategory("Todos");
@@ -176,25 +151,33 @@ export function ProductCatalog({
     setSort("az");
   }
 
+  const activeFilters =
+    (brand !== "Todas" ? 1 : 0) +
+    (maxPrice !== null ? 1 : 0) +
+    (sort !== "az" ? 1 : 0);
+
   return (
-    <section id="catalogo" className="scroll-mt-28">
+    <section
+      id="catalogo"
+      className="scroll-mt-6"
+    >
       {/* Buscador */}
-      <div className="mb-5">
+      <div className="mb-4">
         <input
           type="search"
-          placeholder="Buscar por producto, marca o código..."
+          placeholder="Buscar productos..."
           value={search}
           onChange={(event) =>
             setSearch(event.target.value)
           }
-          className="w-full rounded-full border border-border-selaure bg-white px-5 py-3 text-sm outline-none transition focus:border-gold-primary"
+          className="w-full rounded-full border border-border-selaure bg-white px-5 py-3.5 text-sm outline-none transition focus:border-gold-primary"
         />
       </div>
 
       {/* Categorías */}
       <div
         id="categorias"
-        className="mb-5 scroll-mt-28 flex gap-2 overflow-x-auto pb-2"
+        className="mb-4 flex scroll-mt-6 gap-2 overflow-x-auto pb-2"
       >
         {categories.map((item) => (
           <button
@@ -203,25 +186,55 @@ export function ProductCatalog({
             onClick={() =>
               setCategory(item)
             }
-            className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium transition ${category === item
+            className={`shrink-0 rounded-full px-4 py-2.5 text-xs font-medium transition ${
+              category === item
                 ? "bg-selaure-black text-white"
-                : "border border-border-selaure bg-white text-text-secondary hover:border-gold-primary"
-              }`}
+                : "border border-border-selaure bg-white text-text-secondary"
+            }`}
           >
             {item}
           </button>
         ))}
       </div>
 
+      {/* Barra filtros móvil */}
+      <div className="mb-4 flex items-center justify-between sm:hidden">
+        <button
+          type="button"
+          onClick={() =>
+            setShowFilters(!showFilters)
+          }
+          className="flex items-center gap-2 rounded-full border border-border-selaure bg-white px-4 py-2.5 text-xs font-semibold text-selaure-black"
+        >
+          Filtros
+
+          {activeFilters > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-primary px-1 text-[10px] text-white">
+              {activeFilters}
+            </span>
+          )}
+        </button>
+
+        <p className="text-xs text-text-secondary">
+          {filteredProducts.length} productos
+        </p>
+      </div>
+
       {/* Filtros */}
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div
+        className={`mb-6 grid-cols-1 gap-3 sm:grid sm:grid-cols-3 ${
+          showFilters
+            ? "grid"
+            : "hidden"
+        }`}
+      >
         {/* Marca */}
         <select
           value={brand}
           onChange={(event) =>
             setBrand(event.target.value)
           }
-          className="rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none transition focus:border-gold-primary"
+          className="w-full rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none focus:border-gold-primary"
         >
           {brands.map((item) => (
             <option
@@ -245,7 +258,7 @@ export function ProductCatalog({
                 : null
             )
           }
-          className="rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none transition focus:border-gold-primary"
+          className="w-full rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none focus:border-gold-primary"
         >
           <option value="">
             Cualquier precio
@@ -276,7 +289,7 @@ export function ProductCatalog({
           </option>
         </select>
 
-        {/* Ordenamiento */}
+        {/* Orden */}
         <select
           value={sort}
           onChange={(event) =>
@@ -284,7 +297,7 @@ export function ProductCatalog({
               event.target.value as SortOption
             )
           }
-          className="rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none transition focus:border-gold-primary"
+          className="w-full rounded-xl border border-border-selaure bg-white px-4 py-3 text-sm outline-none focus:border-gold-primary"
         >
           <option value="az">
             Nombre: A - Z
@@ -304,27 +317,39 @@ export function ProductCatalog({
         </select>
       </div>
 
-      {/* Contador y limpiar filtros */}
-      <div className="mb-4 flex items-center justify-between gap-4">
+      {/* Contador escritorio */}
+      <div className="mb-4 hidden items-center justify-between sm:flex">
         <p className="text-sm text-text-secondary">
-          {filteredProducts.length}{" "}
-          {filteredProducts.length === 1
-            ? "producto"
-            : "productos"}
+          {filteredProducts.length} productos
         </p>
 
         <button
           type="button"
           onClick={clearFilters}
-          className="text-xs font-medium text-gold-primary transition hover:underline"
+          className="text-xs font-medium text-gold-primary hover:underline"
         >
           Limpiar filtros
         </button>
       </div>
 
+      {/* Limpiar móvil */}
+      {(activeFilters > 0 ||
+        search ||
+        category !== "Todos") && (
+        <div className="mb-4 sm:hidden">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-xs font-medium text-gold-primary"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      )}
+
       {/* Productos */}
       {filteredProducts.length > 0 ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {filteredProducts.map(
             (product) => (
               <ProductCard
@@ -341,26 +366,21 @@ export function ProductCatalog({
           )}
         </div>
       ) : (
-        /*
-         * Sin resultados
-         */
         <div className="py-16 text-center">
           <p className="text-sm text-text-secondary">
-            No encontramos productos con
-            esos criterios.
+            No encontramos productos con esos criterios.
           </p>
 
           <button
             type="button"
             onClick={clearFilters}
-            className="mt-4 text-sm font-medium text-gold-primary transition hover:underline"
+            className="mt-4 text-sm font-medium text-gold-primary"
           >
             Limpiar filtros
           </button>
         </div>
       )}
 
-      {/* Modal del producto */}
       <ProductModal
         product={selectedProduct}
         whatsappNumber={whatsappNumber}

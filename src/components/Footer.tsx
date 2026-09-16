@@ -2,20 +2,20 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="mt-16 border-t border-border-selaure bg-background-soft">
-      <div className="mx-auto max-w-7xl px-4 py-10">
-        <div className="grid gap-8 md:grid-cols-3">
+    <footer className="mt-12 border-t border-border-selaure bg-background-soft sm:mt-16">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
+        <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-3">
           {/* Marca */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold-primary">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gold-primary sm:text-xs">
               Selaure Beauty
             </p>
 
-            <h2 className="mt-3 font-display text-3xl font-semibold text-selaure-black">
+            <h2 className="mt-3 font-display text-2xl font-semibold leading-tight text-selaure-black sm:text-3xl">
               Belleza que resalta tu esencia
             </h2>
 
-            <p className="mt-3 max-w-sm text-sm leading-6 text-text-secondary">
+            <p className="mt-3 max-w-sm text-xs leading-5 text-text-secondary sm:text-sm sm:leading-6">
               Productos seleccionados de maquillaje, cuidado capilar,
               corporal y belleza.
             </p>
@@ -30,38 +30,38 @@ export function Footer() {
             <div className="mt-4 flex flex-col gap-3 text-sm text-text-secondary">
               <a
                 href="#catalogo"
-                className="transition hover:text-gold-primary"
+                className="w-fit transition hover:text-gold-primary"
               >
                 Catálogo
               </a>
 
               <a
                 href="#categorias"
-                className="transition hover:text-gold-primary"
+                className="w-fit transition hover:text-gold-primary"
               >
                 Categorías
               </a>
             </div>
           </div>
 
-          {/* Información */}
+          {/* Atención */}
           <div>
             <h3 className="text-sm font-semibold text-selaure-black">
               Atención
             </h3>
 
-            <p className="mt-4 text-sm leading-6 text-text-secondary">
+            <p className="mt-4 text-xs leading-5 text-text-secondary sm:text-sm sm:leading-6">
               ¿Tienes dudas sobre algún producto?
             </p>
 
-            <p className="mt-1 text-sm leading-6 text-text-secondary">
+            <p className="mt-1 text-xs leading-5 text-text-secondary sm:text-sm sm:leading-6">
               Contáctanos por WhatsApp y con gusto te ayudamos.
             </p>
           </div>
         </div>
 
-        <div className="mt-10 border-t border-border-selaure pt-6">
-          <p className="text-center text-xs text-text-secondary">
+        <div className="mt-8 border-t border-border-selaure pt-5 sm:mt-10 sm:pt-6">
+          <p className="text-center text-[10px] leading-5 text-text-secondary sm:text-xs">
             © {currentYear} Selaure Beauty. Todos los derechos reservados.
           </p>
         </div>
