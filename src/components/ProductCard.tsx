@@ -21,10 +21,10 @@ export function ProductCard({
   );
 
   const message = encodeURIComponent(
-    `Hola, estoy interesado/a en el producto ${productName} de Selaure Beauty.\n\nCódigo: ${product.codigo}\nPrecio: $${product.precio.toLocaleString(
-      "es-CO"
-    )}\n\n¿Me das más información, por favor?`
-  );
+  `✨ ¡Hola! Estoy interesad@ en el producto *${productName}* de Selaure Beauty 💕🌸
+¿Podrían darme más información sobre este producto, por favor? 🛍️✨
+¡Muchas gracias! 💖`
+);
 
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
 
