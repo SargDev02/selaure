@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncAll } from "@/lib/sync-all";
+import { revalidatePath } from "next/cache";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await syncAll();
+    revalidatePath("/");
 
     return NextResponse.json({
       ok: true,
